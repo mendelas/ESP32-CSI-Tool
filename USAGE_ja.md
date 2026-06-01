@@ -95,16 +95,27 @@ idf.py -p /dev/ttyUSB0 monitor | python python_utils/serial_append_time.py > res
 
 ---
 
-## 6. 描画・解析
+> **GUI（描画）には tkinter が必要**：`sudo apt install python3-tk`（venv作り直し不要）。
+> 確認: `~/ESP32-CSI-Tool/venv/bin/python -c "import tkinter; print('tk OK')"`
 
-リポジトリ追加スクリプト（GUI不要・PNG出力）：
+### A. 取得後にまとめて解析 — `plot_csi.py`（matplotlibウィンドウ表示）
+取得した CSV を渡すと、振幅ヒートマップ／サブキャリア別平均振幅／パケット間隔(ジッタ) の3枚を表示（保存はウィンドウのツールバーから手動）：
 ```bash
 cd ~/ESP32-CSI-Tool
-./venv/bin/python python_utils/plot_csi.py results/my_capture.csv results/my_plot.png
+./venv/bin/python python_utils/plot_csi.py results/my_capture.csv
 ```
-→ 振幅ヒートマップ／サブキャリア別平均振幅／パケット間隔(ジッタ) の3枚。
 
-既存：`python_utils/parse_csi.py`（CSV→振幅/位相サンプル）、`python_utils/serial_plot_csi_live.py`（リアルタイム可視化）。
+### B. リアルタイム表示 — `serial_plot_csi_live.py`（既存）
+取得しながらサブキャリア#44の振幅をライブ表示（番号はスクリプト冒頭 `subcarrier = 44` で変更）。**active_ap ディレクトリ**から（monitor baudを921600にするため）：
+```bash
+newgrp dialout
+. ~/esp/esp-idf/export.sh
+cd ~/ESP32-CSI-Tool/active_ap
+idf.py -p /dev/ttyUSB0 monitor | ~/ESP32-CSI-Tool/venv/bin/python ../python_utils/serial_plot_csi_live.py
+```
+
+### 参考
+`python_utils/parse_csi.py`（CSV→振幅/位相の変換サンプル）。
 
 ---
 

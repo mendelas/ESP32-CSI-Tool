@@ -1,22 +1,20 @@
 #!/usr/bin/env python3
 """
 Plot CSI amplitude from a captured CSV (produced by capture_csi.py or
-`grep CSI_DATA`). Saves a PNG instead of opening a GUI window.
+`grep CSI_DATA`). Opens an interactive matplotlib window; save it yourself
+from the window toolbar if you want a file.
 
 Usage:
-    python plot_csi.py [CSVFILE] [OUTPNG]
+    python plot_csi.py [CSVFILE]
 Defaults:
-    CSVFILE=csi_capture.csv  OUTPNG=csi_plot.png
+    CSVFILE=csi_capture.csv
 """
 import sys
 import re
 import numpy as np
-import matplotlib
-matplotlib.use("Agg")  # headless: write a file, no display needed
 import matplotlib.pyplot as plt
 
 CSVFILE = sys.argv[1] if len(sys.argv) > 1 else "csi_capture.csv"
-OUTPNG = sys.argv[2] if len(sys.argv) > 2 else "csi_plot.png"
 
 amps = []            # list of per-packet amplitude arrays
 local_ts = []        # ESP32 local_timestamp (us), column 18
@@ -97,5 +95,4 @@ else:
                  ha="center", va="center")
 
 fig.tight_layout()
-fig.savefig(OUTPNG, dpi=120)
-print(f"Saved plot -> {OUTPNG}")
+plt.show()
