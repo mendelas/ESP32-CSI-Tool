@@ -5,12 +5,14 @@ function motion_csi(files, labels, tWin, win)
 %
 % Pipeline (amplitude only):
 %   A_k(t) = |H_k(t)| = sqrt(I^2 + Q^2)
-%   Z_k(t) = (A_k(t) - mean(A_k)) / std(A_k)         % per-subcarrier standardization
-%   motion_score(t) = mean_k  Var_window( Z_k(t) )   % moving variance, averaged over k
+%   R_k(t) = A_k(t) / mean(A_k)                       % per-subcarrier MEAN-normalization
+%   motion_score(t) = mean_k  std_window( R_k(t) )    % moving std, averaged over k
 %
 % Larger motion_score => stronger temporal fluctuation => motion.
 % Expected: E00 static low; E01 spikes when hand enters/leaves; E02 sustained high.
-% Near-constant subcarriers (guard/DC, std~0) are excluded from standardization.
+% Note: we divide by the MEAN (a constant), NOT the std. Dividing by std would
+% absorb slow motion into the denominator and suppress it (the earlier issue).
+% Near-constant subcarriers (guard/DC, std~0) are excluded.
 
     if nargin < 1 || isempty(files)
         repo = fileparts(fileparts(mfilename('fullpath')));   % repo root (parent of matlab/)
@@ -27,7 +29,7 @@ function motion_csi(files, labels, tWin, win)
     n = numel(files);
     score = cell(n,1); T = cell(n,1);
 
-    fprintf('\n--- motion_score (window %g..%g s, moving var %.2f s) ---\n', tWin(1), tWin(2), win);
+    fprintf('\n--- motion_score (window %g..%g s, moving std %.2f s) ---\n', tWin(1), tWin(2), win);
     for i = 1:n
         [A, ti] = load_amp(files{i});
         m = ti >= tWin(1) & ti <= tWin(2);
@@ -35,15 +37,14 @@ function motion_csi(files, labels, tWin, win)
         cm = mean(A,1,'omitnan'); [r,c] = find(isnan(A));
         for q = 1:numel(r), A(r(q),c(q)) = cm(c(q)); end
 
-        % per-subcarrier z-score; drop near-constant (guard/DC) subcarriers
+        % per-subcarrier MEAN-normalization (fractional); drop near-constant bins
         mu = mean(A,1);  sd = std(A,0,1);
         keep = sd > 0.05*median(sd(sd>0));
-        Z = (A(:,keep) - mu(keep)) ./ sd(keep);
+        R = A(:,keep) ./ mu(keep);            % relative amplitude (dimensionless)
 
         rate = (numel(ti)-1) / (ti(end)-ti(1));
         w    = max(3, round(win*rate));
-        V    = movvar(Z, w, 0, 1);            % moving variance along time  [T x Kkeep]
-        ms   = mean(V, 2);                    % motion_score(t)
+        ms   = mean(movstd(R, w, 0, 1), 2);   % motion_score(t) = avg fractional moving std
 
         score{i} = ms; T{i} = ti;
         fprintf('%-22s : mean motion_score = %.3f   (p95 = %.3f, max = %.3f)\n', ...
@@ -55,8 +56,8 @@ function motion_csi(files, labels, tWin, win)
     hold on;
     for i = 1:n, plot(T{i}, score{i}, 'LineWidth', 1.0); end
     hold off; grid on; legend(labels, 'Location','best');
-    xlabel('time [s]'); ylabel('motion\_score(t) = mean_k Var_{win}(Z_k)');
-    title(sprintf('Motion score (per-subcarrier z-score, %.2f s moving variance)', win));
+    xlabel('time [s]'); ylabel('motion\_score(t) = mean_k std_{win}(A_k/mean A_k)');
+    title(sprintf('Motion score (mean-normalized, %.2f s moving std)', win));
 end
 
 % ---- local: amplitude matrix [time x subcarrier] + relative time (s) ----
