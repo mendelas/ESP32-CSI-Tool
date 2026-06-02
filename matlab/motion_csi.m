@@ -27,7 +27,7 @@ function motion_csi(files, labels, tWin, win)
     if nargin < 4 || isempty(win),  win  = 0.5; end    % moving-window length [s]
 
     n = numel(files);
-    score = cell(n,1); T = cell(n,1);
+    score = cell(n,1); T = cell(n,1); Dmat = cell(n,1);
 
     fprintf('\n--- motion_score (window %g..%g s, moving std %.2f s) ---\n', tWin(1), tWin(2), win);
     for i = 1:n
@@ -46,7 +46,9 @@ function motion_csi(files, labels, tWin, win)
         w    = max(3, round(win*rate));
         ms   = mean(movstd(R, w, 0, 1), 2);   % motion_score(t) = avg fractional moving std
 
-        score{i} = ms; T{i} = ti;
+        D = A ./ mu - 1;                       % fractional deviation per subcarrier
+        D(:, ~keep) = 0;                       % blank dead/guard bins
+        score{i} = ms; T{i} = ti; Dmat{i} = D;
         fprintf('%-22s : mean motion_score = %.3f   (p95 = %.3f, max = %.3f)\n', ...
                 labels{i}, mean(ms), prctile(ms,95), max(ms));
     end
@@ -58,6 +60,26 @@ function motion_csi(files, labels, tWin, win)
     hold off; grid on; legend(labels, 'Location','best');
     xlabel('time [s]'); ylabel('motion\_score(t) = mean_k std_{win}(A_k/mean A_k)');
     title(sprintf('Motion score (mean-normalized, %.2f s moving std)', win));
+
+    %% Figure 2: per-subcarrier fractional fluctuation heatmap (all subcarriers)
+    K = size(Dmat{1}, 2);
+    alld = [];
+    for i = 1:n, v = Dmat{i}(:); alld = [alld; abs(v(isfinite(v)))]; end %#ok<AGROW>
+    cl = prctile(alld, 99); if ~(cl > 0), cl = 1; end
+    n2 = 128;                                   % blue(-) - white(0) - red(+)
+    cmap = [ [linspace(0,1,n2)', linspace(0,1,n2)', ones(n2,1)]; ...
+             [ones(n2,1), linspace(1,0,n2)', linspace(1,0,n2)'] ];
+    figure('Color','w','Name','CSI fluctuation heatmaps');
+    tl = tiledlayout(1, n, 'TileSpacing','compact', 'Padding','compact');
+    for i = 1:n
+        nexttile;
+        imagesc(T{i}, 1:K, Dmat{i}'); set(gca,'YDir','normal'); clim([-cl cl]);
+        title(labels{i}); xlabel('time [s]');
+        if i == 1, ylabel('subcarrier index k'); end
+    end
+    colormap(cmap); cb = colorbar; cb.Layout.Tile = 'east';
+    cb.Label.String = 'A_k/mean_k - 1';
+    title(tl, 'Per-subcarrier fractional fluctuation  (static \approx white, motion = colored bands)');
 end
 
 % ---- local: amplitude matrix [time x subcarrier] + relative time (s) ----
